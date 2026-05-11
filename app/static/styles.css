@@ -1,0 +1,10 @@
+body { font-family: Arial, sans-serif; margin: 0; background: #fafafa; color: #111; }
+header { padding: 16px 24px; background: #1a365d; color: #fff; }
+header a { color: #fff; margin-right: 12px; text-decoration: none; }
+main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+section, article { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+form { display: grid; gap: 10px; }
+input, textarea, button { font: inherit; padding: 8px; }
+button { background: #2b6cb0; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.message.user { border-left: 4px solid #2b6cb0; }
+.message.assistant { border-left: 4px solid #2f855a; }

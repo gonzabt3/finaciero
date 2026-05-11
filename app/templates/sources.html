@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Fuentes</h2>
+{% if sources %}
+<ul>
+  {% for source in sources %}
+  <li>
+    <a href="/sources/{{ source.id }}">{{ source.title }}</a>
+    <small>({{ source.type.value }} - {{ source.status.value }})</small>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No hay fuentes cargadas todavía.</p>
+{% endif %}
+{% endblock %}

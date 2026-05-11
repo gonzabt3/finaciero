@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if source %}
+<h2>{{ source.title }}</h2>
+<p><strong>Tipo:</strong> {{ source.type.value }}</p>
+<p><strong>Estado:</strong> {{ source.status.value }}</p>
+{% if source.url %}<p><strong>URL:</strong> <a href="{{ source.url }}" target="_blank">{{ source.url }}</a></p>{% endif %}
+{% if source.error_message %}<p><strong>Error:</strong> {{ source.error_message }}</p>{% endif %}
+<h3>Documentos</h3>
+{% for document in source.documents %}
+<article>
+  <p><strong>Idioma:</strong> {{ document.language or 'n/a' }}</p>
+  <p>{{ document.clean_text[:500] }}{% if document.clean_text|length > 500 %}...{% endif %}</p>
+  <p>Chunks: {{ document.chunks|length }}</p>
+</article>
+{% endfor %}
+{% else %}
+<p>Fuente no encontrada.</p>
+{% endif %}
+{% endblock %}

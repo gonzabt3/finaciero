@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Chat con contexto</h2>
+<form method="post" action="/chat">
+  {% if selected_conversation_id %}
+  <input type="hidden" name="conversation_id" value="{{ selected_conversation_id }}" />
+  {% endif %}
+  <label>Pregunta
+    <textarea name="question" rows="4" required></textarea>
+  </label>
+  <button type="submit">Preguntar</button>
+</form>
+
+{% if conversations %}
+<h3>Conversaciones</h3>
+<ul>
+  {% for item in conversations %}
+  <li><a href="/chat?conversation_id={{ item.id }}">{{ item.title }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if messages %}
+<h3>Mensajes</h3>
+<div>
+  {% for message in messages %}
+  <article class="message {{ message.role.value }}">
+    <strong>{{ message.role.value }}:</strong>
+    <p>{{ message.content }}</p>
+    {% if message.sources_json %}
+    <details>
+      <summary>Fuentes usadas</summary>
+      <ul>
+        {% for source in message.sources_json %}
+        <li>
+          <a href="/sources/{{ source.source_id }}">{{ source.source_title }}</a>
+          {% if source.source_url %}<small>({{ source.source_url }})</small>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
