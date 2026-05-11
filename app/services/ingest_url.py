@@ -55,7 +55,7 @@ def ingest_url_source(db: Session, payload: IngestURLRequest) -> Source:
         return source
     except Exception as exc:
         source.status = SourceStatus.failed
-        source.error_message = str(exc)
+        source.error_message = f'processing_error: {exc.__class__.__name__}'
         db.commit()
         db.refresh(source)
         return source

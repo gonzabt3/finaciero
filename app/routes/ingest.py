@@ -15,6 +15,12 @@ def _is_form_request(request: Request) -> bool:
     return 'application/x-www-form-urlencoded' in content_type or 'multipart/form-data' in content_type
 
 
+def _safe_error_message(source_status: str) -> str | None:
+    if source_status == 'failed':
+        return 'No se pudo procesar la fuente. Revisa la URL o el contenido e inténtalo nuevamente.'
+    return None
+
+
 @router.post('/ingest/text')
 def ingest_text(
     request: Request,
@@ -31,7 +37,9 @@ def ingest_text(
     if _is_form_request(request):
         return RedirectResponse(url=f'/sources/{source.id}', status_code=303)
 
-    return JSONResponse({'source_id': source.id, 'status': source.status.value, 'error_message': source.error_message})
+    return JSONResponse(
+        {'source_id': source.id, 'status': source.status.value, 'error_message': _safe_error_message(source.status.value)}
+    )
 
 
 @router.post('/ingest/url')
@@ -48,4 +56,6 @@ def ingest_url(
     if _is_form_request(request):
         return RedirectResponse(url=f'/sources/{source.id}', status_code=303)
 
-    return JSONResponse({'source_id': source.id, 'status': source.status.value, 'error_message': source.error_message})
+    return JSONResponse(
+        {'source_id': source.id, 'status': source.status.value, 'error_message': _safe_error_message(source.status.value)}
+    )
