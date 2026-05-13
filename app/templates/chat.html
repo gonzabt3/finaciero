@@ -1,47 +1,172 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Chat con contexto</h2>
-<form method="post" action="/chat">
-  {% if selected_conversation_id %}
-  <input type="hidden" name="conversation_id" value="{{ selected_conversation_id }}" />
-  {% endif %}
-  <label>Pregunta
-    <textarea name="question" rows="4" required></textarea>
-  </label>
-  <button type="submit">Preguntar</button>
-</form>
+<div x-data="chatApp({{ selected_conversation_id | tojson }}, {{ messages_data | tojson }})" class="chat-layout">
 
-{% if conversations %}
-<h3>Conversaciones</h3>
-<ul>
-  {% for item in conversations %}
-  <li><a href="/chat?conversation_id={{ item.id }}">{{ item.title }}</a></li>
-  {% endfor %}
-</ul>
-{% endif %}
+  <aside class="chat-sidebar">
+    <h3>Conversaciones</h3>
+    <a href="/chat" class="btn-new-chat">+ Nueva</a>
+    <ul class="conversation-list">
+      {% for item in conversations %}
+      <li>
+        <a href="/chat?conversation_id={{ item.id }}"
+           {% if item.id == selected_conversation_id %}class="active"{% endif %}>
+          {{ item.title }}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </aside>
 
-{% if messages %}
-<h3>Mensajes</h3>
-<div>
-  {% for message in messages %}
-  <article class="message {{ message.role.value }}">
-    <strong>{{ message.role.value }}:</strong>
-    <p>{{ message.content }}</p>
-    {% if message.sources_json %}
-    <details>
-      <summary>Fuentes usadas</summary>
-      <ul>
-        {% for source in message.sources_json %}
-        <li>
-          <a href="/sources/{{ source.source_id }}">{{ source.source_title }}</a>
-          {% if source.source_url %}<small>({{ source.source_url }})</small>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-  </article>
-  {% endfor %}
+  <section class="chat-main">
+
+    <div class="chat-messages" x-ref="messages">
+      <template x-if="messages.length === 0">
+        <p class="chat-empty">Haz tu primera pregunta sobre economía.</p>
+      </template>
+
+      <template x-for="(msg, idx) in messages" :key="idx">
+        <article :class="'message ' + msg.role">
+          <strong x-text="msg.role === 'user' ? 'Tú' : 'Asistente'"></strong>
+
+          <template x-if="msg.loading && msg.content === ''">
+            <p class="typing-indicator"><span></span><span></span><span></span></p>
+          </template>
+
+          <p class="message-content" x-show="msg.content !== ''" x-text="msg.content"></p>
+
+          <template x-if="msg.sources && msg.sources.length > 0">
+            <details class="message-sources">
+              <summary>Fuentes usadas</summary>
+              <ul>
+                <template x-for="source in msg.sources" :key="source.chunk_id">
+                  <li>
+                    <a :href="'/sources/' + source.source_id" x-text="source.source_title" target="_blank"></a>
+                    <template x-if="source.source_url">
+                      <small x-text="'(' + source.source_url + ')'"></small>
+                    </template>
+                  </li>
+                </template>
+              </ul>
+            </details>
+          </template>
+        </article>
+      </template>
+    </div>
+
+    <p x-show="error" x-text="error" class="chat-error" x-cloak></p>
+
+    <form class="chat-input-bar" @submit.prevent="sendMessage">
+      <textarea
+        x-model="question"
+        rows="3"
+        placeholder="Escribe tu pregunta&hellip; (Ctrl+Enter para enviar)"
+        :disabled="loading"
+        @keydown.ctrl.enter.prevent="sendMessage"
+      ></textarea>
+      <button type="submit" :disabled="loading || question.trim() === ''">
+        <template x-if="!loading">
+          <span>Preguntar</span>
+        </template>
+        <template x-if="loading">
+          <span>Pensando&hellip;</span>
+        </template>
+      </button>
+    </form>
+
+  </section>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function chatApp(initialConversationId, initialMessages) {
+  return {
+    conversationId: initialConversationId,
+    messages: (initialMessages || []).map(function(m) {
+      return { role: m.role, content: m.content, sources: m.sources || [], loading: false };
+    }),
+    question: '',
+    loading: false,
+    error: '',
+
+    init() {
+      this.scrollToBottom();
+    },
+
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const panel = this.$refs.messages;
+        if (panel) panel.scrollTop = panel.scrollHeight;
+      });
+    },
+
+    async sendMessage() {
+      const question = this.question.trim();
+      if (!question || this.loading) return;
+
+      this.question = '';
+      this.loading = true;
+      this.error = '';
+
+      this.messages.push({ role: 'user', content: question, sources: [], loading: false });
+
+      const assistantIdx = this.messages.length;
+      this.messages.push({ role: 'assistant', content: '', sources: [], loading: true });
+      this.scrollToBottom();
+
+      try {
+        const response = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, conversation_id: this.conversationId }),
+        });
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            let data;
+            try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+            if (data.type === 'token') {
+              this.messages[assistantIdx].content += data.content;
+              this.scrollToBottom();
+            } else if (data.type === 'done') {
+              this.messages[assistantIdx].loading = false;
+              this.messages[assistantIdx].sources = data.sources || [];
+              if (!this.conversationId) {
+                this.conversationId = data.conversation_id;
+                history.replaceState({}, '', '/chat?conversation_id=' + data.conversation_id);
+              }
+            } else if (data.type === 'error') {
+              throw new Error(data.message || 'Error en el servidor.');
+            }
+          }
+        }
+      } catch (err) {
+        this.messages[assistantIdx].content = 'Error al procesar la respuesta. Intenta de nuevo.';
+        this.messages[assistantIdx].loading = false;
+        this.error = err.message || 'Error inesperado.';
+      } finally {
+        this.loading = false;
+        this.scrollToBottom();
+      }
+    },
+  };
+}
+</script>
 {% endblock %}

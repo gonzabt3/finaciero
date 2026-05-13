@@ -40,15 +40,27 @@ def chat_page(request: Request, conversation_id: int | None = None, db: Session 
     conversation = None
     if conversation_id:
         conversation = db.execute(
-            select(Conversation).options(selectinload(Conversation.messages)).where(Conversation.id == conversation_id)
+            select(Conversation)
+            .options(selectinload(Conversation.messages))
+            .where(Conversation.id == conversation_id)
         ).scalar_one_or_none()
+
+    raw_messages = sorted(conversation.messages, key=lambda m: m.created_at) if conversation else []
+    messages_data = [
+        {
+            'role': msg.role.value,
+            'content': msg.content,
+            'sources': msg.sources_json or [],
+        }
+        for msg in raw_messages
+    ]
+
     return request.app.state.templates.TemplateResponse(
         request=request,
         name='chat.html',
         context={
             'conversations': conversations,
-            'conversation': conversation,
-            'messages': conversation.messages if conversation else [],
             'selected_conversation_id': conversation_id,
+            'messages_data': messages_data,
         },
     )
