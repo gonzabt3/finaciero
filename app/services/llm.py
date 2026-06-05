@@ -1,9 +1,20 @@
-from openai import OpenAI
+import asyncio
+import logging
+from collections.abc import AsyncGenerator
+
+from openai import AsyncOpenAI, OpenAI
 
 from app.config import get_settings
 
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
+_FALLBACK_PREFIX = (
+    'Modo fallback activo (sin OPENAI_API_KEY). '
+    'Aquí tienes una respuesta basada en el contexto recuperado:\n\n'
+)
+_NO_SOURCES = 'No encontré fuentes relevantes todavía. Carga más contenido e inténtalo de nuevo.'
 
 
 def build_prompt(question: str, contexts: list[dict]) -> str:
@@ -20,7 +31,7 @@ def build_prompt(question: str, contexts: list[dict]) -> str:
 
 def generate_answer(question: str, contexts: list[dict]) -> str:
     if not contexts:
-        return 'No encontré fuentes relevantes todavía. Carga más contenido e inténtalo de nuevo.'
+        return _NO_SOURCES
 
     prompt = build_prompt(question, contexts)
     if settings.OPENAI_API_KEY:
@@ -32,8 +43,33 @@ def generate_answer(question: str, contexts: list[dict]) -> str:
         )
         return response.choices[0].message.content or 'No se pudo generar una respuesta.'
 
-    return (
-        'Modo fallback activo (sin OPENAI_API_KEY). '
-        'Aquí tienes una respuesta basada en el contexto recuperado:\n\n'
-        + contexts[0]['content'][:900]
-    )
+    return _FALLBACK_PREFIX + contexts[0]['content'][:900]
+
+
+async def stream_answer(question: str, contexts: list[dict]) -> AsyncGenerator[str, None]:
+    """Yield answer tokens one by one; used by the SSE streaming endpoint."""
+    if not contexts:
+        yield _NO_SOURCES
+        return
+
+    prompt = build_prompt(question, contexts)
+
+    if settings.OPENAI_API_KEY:
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        stream = await client.chat.completions.create(
+            model=settings.LLM_MODEL,
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            stream=True,
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
+    else:
+        fallback_text = _FALLBACK_PREFIX + contexts[0]['content'][:900]
+        for word in fallback_text.split(' '):
+            yield word + ' '
+            await asyncio.sleep(0.02)
