@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Body, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -34,13 +36,15 @@ def ingest_text(
     published_at: str | None = Form(default=None),
 ):
     if payload is None:
-        from datetime import datetime
         parsed_published_at = None
         if published_at:
             try:
                 parsed_published_at = datetime.fromisoformat(published_at)
             except ValueError:
-                pass
+                return JSONResponse(
+                    status_code=422,
+                    content={'detail': 'El campo published_at debe ser una fecha ISO 8601 válida (ej. 2024-03-15).'},
+                )
         payload = IngestTextRequest(
             title=title or '',
             text=text or '',

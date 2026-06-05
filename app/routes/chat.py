@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from datetime import datetime
 
 from fastapi import APIRouter, Body, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
@@ -59,8 +60,8 @@ def _resolve_contexts(
     question: str,
     top_k: int,
     speaker: str | None = None,
-    date_from=None,
-    date_to=None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[dict]:
     # Auto-detect speaker from the question if not explicitly provided
     effective_speaker = speaker or _detect_speaker(question)

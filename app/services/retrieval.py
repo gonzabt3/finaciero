@@ -24,6 +24,8 @@ def retrieve_top_chunks(
         .where(Chunk.embedding.is_not(None), Source.status == SourceStatus.processed)
     )
     if speaker:
+        # The f-string builds the LIKE pattern value (e.g. '%Milei%') which SQLAlchemy
+        # passes as a bind parameter — this is not SQL injection.
         stmt = stmt.where(Chunk.speaker.ilike(f'%{speaker}%'))
     if date_from:
         stmt = stmt.where(Chunk.published_at >= date_from)
