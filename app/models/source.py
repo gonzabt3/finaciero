@@ -28,6 +28,7 @@ class Source(Base):
     source_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    speaker: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[SourceStatus] = mapped_column(
         Enum(SourceStatus, name='source_status_enum'), nullable=False, default=SourceStatus.pending
     )

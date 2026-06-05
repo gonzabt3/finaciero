@@ -17,11 +17,26 @@ _FALLBACK_PREFIX = (
 _NO_SOURCES = 'No encontré fuentes relevantes todavía. Carga más contenido e inténtalo de nuevo.'
 
 
+def _format_context_item(idx: int, item: dict) -> str:
+    meta_parts = []
+    if item.get('speaker'):
+        meta_parts.append(item['speaker'])
+    if item.get('published_at'):
+        meta_parts.append(item['published_at'].strftime('%d %b %Y'))
+    if item.get('source_title'):
+        meta_parts.append(item['source_title'])
+    if meta_parts:
+        header = ' | '.join(meta_parts)
+        return f'[{idx + 1}] [{header}]\n{item["content"]}'
+    return f'[{idx + 1}] {item["content"]}'
+
+
 def build_prompt(question: str, contexts: list[dict]) -> str:
-    context_block = '\n\n'.join([f"[{idx + 1}] {item['content']}" for idx, item in enumerate(contexts)])
+    context_block = '\n\n'.join([_format_context_item(idx, item) for idx, item in enumerate(contexts)])
     return (
         'Eres un asistente de conocimiento económico. '
         'Responde usando solamente el contexto recuperado cuando sea posible. '
+        'Cuando cites información, menciona el autor y la fecha si están disponibles. '
         'Si no alcanza, di claramente qué falta.\n\n'
         f'Contexto:\n{context_block}\n\n'
         f'Pregunta: {question}\n'

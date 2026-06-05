@@ -46,6 +46,8 @@ def ingest_url_source(db: Session, payload: IngestURLRequest) -> Source:
                     content=chunk.content,
                     token_count=chunk.token_count,
                     embedding=embedding_service.generate_embedding(chunk.content),
+                    speaker=source.speaker or source.author,
+                    published_at=source.published_at,
                 )
             )
 

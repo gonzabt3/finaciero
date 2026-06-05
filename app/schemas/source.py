@@ -8,8 +8,10 @@ class SourceOut(BaseModel):
     type: str
     title: str
     author: str | None
+    speaker: str | None
     source_name: str | None
     url: str | None
+    published_at: datetime | None
     status: str
     error_message: str | None
     created_at: datetime

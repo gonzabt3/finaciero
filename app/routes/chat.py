@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 from fastapi import APIRouter, Body, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
@@ -16,6 +17,24 @@ from app.services.retrieval import fallback_recent_chunks, retrieve_top_chunks
 
 router = APIRouter(tags=['chat'])
 logger = logging.getLogger(__name__)
+
+# Regex patterns to extract a speaker name from Spanish questions
+_SPEAKER_PATTERNS = [
+    r'(?:qu[eé]|cuales?)\s+(?:dijo|dice|declar[oó]|menciono|mencion[oó]|coment[oó])\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ]{2,40}?)(?=\s+(?:sobre|acerca|en|de)|\s*\?|$)',
+    r'(?:últimas?|recientes?)\s+(?:declaraciones?|palabras?|dichos?|comentarios?)\s+de\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ\s]{2,40}?)(?=\s+(?:sobre|acerca)|\s*\?|$)',
+    r'(?:qu[eé])\s+opina\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ]{2,40}?)(?=\s+(?:sobre|acerca)|\s*\?|$)',
+    r'(?:seg[uú]n)\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ]{2,40}?)(?=\s*,|\s+(?:qu[eé]|c[oó]mo)|\s*\?|$)',
+    r'posici[oó]n\s+de\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ]{2,40}?)(?=\s+(?:sobre|acerca)|\s*\?|$)',
+]
+
+
+def _detect_speaker(question: str) -> str | None:
+    """Try to extract a speaker/author name from a natural language question."""
+    for pattern in _SPEAKER_PATTERNS:
+        match = re.search(pattern, question, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
 
 
 def _is_form_request(request: Request) -> bool:
@@ -35,10 +54,22 @@ def _build_sources(contexts: list[dict]) -> list[dict]:
     ]
 
 
-def _resolve_contexts(db: Session, question: str, top_k: int) -> list[dict]:
+def _resolve_contexts(
+    db: Session,
+    question: str,
+    top_k: int,
+    speaker: str | None = None,
+    date_from=None,
+    date_to=None,
+) -> list[dict]:
+    # Auto-detect speaker from the question if not explicitly provided
+    effective_speaker = speaker or _detect_speaker(question)
     embedding = EmbeddingService().generate_embedding(question)
     try:
-        return retrieve_top_chunks(db, embedding, top_k=top_k)
+        return retrieve_top_chunks(
+            db, embedding, top_k=top_k,
+            speaker=effective_speaker, date_from=date_from, date_to=date_to,
+        )
     except Exception:
         # pgvector extension unavailable or no embeddings yet – fall back to recency ranking
         return fallback_recent_chunks(db, top_k=top_k)
@@ -70,7 +101,7 @@ def chat_endpoint(
     conversation = _get_or_create_conversation(db, data.conversation_id, data.question)
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=data.question))
 
-    contexts = _resolve_contexts(db, data.question, data.top_k)
+    contexts = _resolve_contexts(db, data.question, data.top_k, speaker=data.speaker, date_from=data.date_from, date_to=data.date_to)
     answer = generate_answer(data.question, contexts)
     sources = _build_sources(contexts)
 
@@ -107,7 +138,7 @@ async def chat_stream_endpoint(
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=payload.question))
     db.flush()
 
-    contexts = _resolve_contexts(db, payload.question, payload.top_k)
+    contexts = _resolve_contexts(db, payload.question, payload.top_k, speaker=payload.speaker, date_from=payload.date_from, date_to=payload.date_to)
     sources = _build_sources(contexts)
     conversation_id = conversation.id
 

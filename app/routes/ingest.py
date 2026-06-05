@@ -30,9 +30,26 @@ def ingest_text(
     text: str | None = Form(default=None),
     author: str | None = Form(default=None),
     source_name: str | None = Form(default=None),
+    speaker: str | None = Form(default=None),
+    published_at: str | None = Form(default=None),
 ):
-    data = payload or IngestTextRequest(title=title or '', text=text or '', author=author, source_name=source_name)
-    source = ingest_text_source(db, data)
+    if payload is None:
+        from datetime import datetime
+        parsed_published_at = None
+        if published_at:
+            try:
+                parsed_published_at = datetime.fromisoformat(published_at)
+            except ValueError:
+                pass
+        payload = IngestTextRequest(
+            title=title or '',
+            text=text or '',
+            author=author,
+            source_name=source_name,
+            speaker=speaker,
+            published_at=parsed_published_at,
+        )
+    source = ingest_text_source(db, payload)
 
     if _is_form_request(request):
         return RedirectResponse(url=f'/sources/{source.id}', status_code=303)

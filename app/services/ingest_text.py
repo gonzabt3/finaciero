@@ -18,7 +18,9 @@ def ingest_text_source(db: Session, payload: IngestTextRequest) -> Source:
         type=SourceType.text,
         title=payload.title,
         author=payload.author,
+        speaker=payload.speaker,
         source_name=payload.source_name,
+        published_at=payload.published_at,
         status=SourceStatus.pending,
     )
     db.add(source)
@@ -40,6 +42,8 @@ def ingest_text_source(db: Session, payload: IngestTextRequest) -> Source:
                     content=chunk.content,
                     token_count=chunk.token_count,
                     embedding=embedding_service.generate_embedding(chunk.content),
+                    speaker=source.speaker or source.author,
+                    published_at=source.published_at,
                 )
             )
 
